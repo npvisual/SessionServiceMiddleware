@@ -26,13 +26,16 @@ public enum SessionStatusAction {
     case error(Error)
 }
 
-public enum AuthenticationServicesState {
-    case authenticated
-    case loggedOut
-    case undefined
+// MARK: - STATE
+public struct SessionServiceState {
+
+    var state: AuthenticationState
+    var credentials: ASAuthorizationCredential
     
-    struct Credentials {
-        var credentials: ASAuthorizationCredential
+    public enum AuthenticationState {
+        case authenticated
+        case loggedOut
+        case undefined
     }
 }
 
@@ -41,15 +44,18 @@ public enum CredentialStateResult {
     case failure(SessionError)
 }
 
+// MARK: - ERROR
 public enum SessionError: Error {
     case FailureToWriteToKeychain
     case UnknownCredentialState
 }
 
+// MARK: - CONSTANTS
 private enum KeyStorageNamingConstants {
     static let userID = "userID"
 }
 
+// MARK: - PROTOCOL
 public protocol SessionServiceProvider: ASAuthorizationProvider {
     func getCredentialState(userID: String) -> Future<CredentialStateResult, Never>
 }
@@ -57,7 +63,7 @@ public protocol SessionServiceProvider: ASAuthorizationProvider {
 public final class SessionServiceMiddleware: Middleware {
     public typealias InputActionType = SessionServicesAction
     public typealias OutputActionType = SessionServicesAction
-    public typealias StateType = AuthenticationServicesState
+    public typealias StateType = SessionServiceState
 
     private static let logger = OSLog(subsystem: Bundle.main.bundleIdentifier!, category: "SessionServicesMiddleware")
 
@@ -75,11 +81,9 @@ public final class SessionServiceMiddleware: Middleware {
     public func receiveContext(getState: @escaping GetState<StateType>, output: AnyActionHandler<OutputActionType>) {
         self.output = output
         self.keychain = KeychainWrapper(serviceName: Bundle.main.bundleIdentifier ?? "SessionServicesMiddleware")
-        if let userID = keychain?.string(forKey: KeyStorageNamingConstants.userID) {
-            os_log("The federated user ID was retrieved successfully from the keychain : %s",
-                   log: SessionServiceMiddleware.logger,
-                   type: .debug,
-                   userID.debugDescription)
+        // After the context is received, we immediately check to see if we have a stored user ID, which
+        // would indicate that the user has already registered, and dispatch the corresponding action.
+        if let userID = read(key: KeyStorageNamingConstants.userID) {
             output.dispatch(.status(.registered(userID)))
         }
     }
@@ -91,7 +95,7 @@ public final class SessionServiceMiddleware: Middleware {
     ) {
         switch action {
         case let .request(.authenticated(credential as ASAuthorizationAppleIDCredential)):
-            if !saveUserID(credential.user) { output?.dispatch(.status(.error(SessionError.FailureToWriteToKeychain))) }
+            if !write(userID: credential.user) { output?.dispatch(.status(.error(SessionError.FailureToWriteToKeychain))) }
         case let .request(.sessionState(user)):
             cancellable = provider
                 .getCredentialState(userID: user)
@@ -130,13 +134,23 @@ extension SessionServiceMiddleware {
 //        }
 //    }
     
-    private func saveUserID(_ userID: String) -> Bool {
+    private func write(userID: String) -> Bool {
         guard let saveSuccessful = keychain?.set(userID, forKey: KeyStorageNamingConstants.userID) else { return false }
         os_log("The federated ID was stored successfully in the keychain : %s",
                log: SessionServiceMiddleware.logger,
                type: .debug,
                saveSuccessful.description)
         return saveSuccessful
+    }
+    
+    private func read(key: String) -> String? {
+        guard let result = keychain?.string(forKey: key) else { return nil }
+        os_log("The key %s was stored successfully in the keychain : %s",
+               log: SessionServiceMiddleware.logger,
+               type: .debug,
+               key,
+               result)
+        return result
     }
 
 //    private func saveInviteCode(_ code: String) {
@@ -192,5 +206,20 @@ extension ASAuthorizationAppleIDProvider: SessionServiceProvider {
                 }
             )
         }
+    }
+}
+
+extension Reducer where ActionType == SessionServicesAction, StateType == SessionServiceState {
+    public static let session = Reducer { action, state in
+        var state = state
+        switch (state.state, action) {
+        case let (.loggedOut, .request(.authenticated(credential))) :
+            state.state = .authenticated
+            state.credentials = credential
+        case let (.authenticated, .request(.authenticated(credential))):
+            state.credentials = credential
+        default: break
+        }
+        return state
     }
 }
