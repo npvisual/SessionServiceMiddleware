@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 import os.log
-import AuthenticationServices
+import ç
 import SwiftRex
 import SwiftKeychainWrapper
 
@@ -13,11 +13,13 @@ public enum SessionServiceAction {
     case status(SessionStatusAction)
 }
 
+//sourcery: Prism, imports = ["ASAuthorizationCredential"]
 public enum SessionRequestAction {
     case authenticated(ASAuthorizationCredential)
     case sessionState(String)
 }
 
+//sourcery: Prism
 public enum SessionStatusAction {
     case valid
     case terminated
@@ -27,12 +29,14 @@ public enum SessionStatusAction {
 }
 
 // MARK: - STATE
+
+//sourcery: AutoEquatable
 public struct SessionServiceState {
 
     var state: AuthenticationState
     var credentials: ASAuthorizationCredential
     
-    public enum AuthenticationState {
+    public enum AuthenticationState: Equatable {
         case authenticated
         case loggedOut
         case undefined
