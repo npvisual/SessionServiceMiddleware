@@ -8,7 +8,7 @@ import SwiftKeychainWrapper
 // MARK: - ACTIONS
 
 //sourcery: Prism
-public enum SessionServicesAction {
+public enum SessionServiceAction {
     case request(SessionRequestAction)
     case status(SessionStatusAction)
 }
@@ -61,8 +61,8 @@ public protocol SessionServiceProvider: ASAuthorizationProvider {
 }
 
 public final class SessionServiceMiddleware: Middleware {
-    public typealias InputActionType = SessionServicesAction
-    public typealias OutputActionType = SessionServicesAction
+    public typealias InputActionType = SessionServiceAction
+    public typealias OutputActionType = SessionServiceAction
     public typealias StateType = SessionServiceState
 
     private static let logger = OSLog(subsystem: Bundle.main.bundleIdentifier!, category: "SessionServicesMiddleware")
@@ -209,7 +209,7 @@ extension ASAuthorizationAppleIDProvider: SessionServiceProvider {
     }
 }
 
-extension Reducer where ActionType == SessionServicesAction, StateType == SessionServiceState {
+extension Reducer where ActionType == SessionServiceAction, StateType == SessionServiceState {
     public static let session = Reducer { action, state in
         var state = state
         switch (state.state, action) {
