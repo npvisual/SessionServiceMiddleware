@@ -4,25 +4,37 @@
 import PackageDescription
 
 let package = Package(
-    name: "AuthenticationServicesMiddleware",
+    name: "SessionServiceMiddleware",
+    // TODO: Review version requirements
+    platforms: [
+        .macOS(.v10_15),
+        .iOS(.v13),
+        .tvOS(.v13),
+        .watchOS(.v6),
+    ],
     products: [
         // Products define the executables and libraries a package produces, and make them visible to other packages.
         .library(
-            name: "AuthenticationServicesMiddleware",
-            targets: ["AuthenticationServicesMiddleware"]),
+            name: "SessionServiceMiddleware",
+            targets: ["SessionServiceMiddleware"]),
     ],
     dependencies: [
         // Dependencies declare other packages that this package depends on.
         // .package(url: /* package url */, from: "1.0.0"),
+        .package(url: "https://github.com/SwiftRex/SwiftRex.git", from: "0.7.4"),
+        .package(url: "https://github.com/jrendel/SwiftKeychainWrapper", from: "4.0.0"),
     ],
     targets: [
         // Targets are the basic building blocks of a package. A target can define a module or a test suite.
         // Targets can depend on other targets in this package, and on products in packages this package depends on.
         .target(
-            name: "AuthenticationServicesMiddleware",
-            dependencies: []),
+            name: "SessionServiceMiddleware",
+            dependencies: [
+                .product(name: "CombineRex", package: "SwiftRex"),
+                .product(name: "SwiftKeychainWrapper", package: "SwiftKeychainWrapper"),
+            ]),
         .testTarget(
-            name: "AuthenticationServicesMiddlewareTests",
-            dependencies: ["AuthenticationServicesMiddleware"]),
+            name: "SessionServiceMiddlewareTests",
+            dependencies: ["SessionServiceMiddleware"]),
     ]
 )
