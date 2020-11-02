@@ -96,7 +96,7 @@ public final class SessionServiceMiddleware: Middleware {
         // After the context is received, we immediately check to see if we have a stored user ID, which
         // would indicate that the user has already registered, and dispatch the corresponding action.
         if let userID = read(key: KeyStorageNamingConstants.userID) {
-            output.dispatch(.status(.registered(userID)))
+            self.output?.dispatch(.status(.registered(userID)))
         }
     }
 
@@ -157,7 +157,7 @@ extension SessionServiceMiddleware {
     
     private func read(key: String) -> String? {
         guard let result = keychain?.string(forKey: key) else { return nil }
-        os_log("The key %s was stored successfully in the keychain : %s",
+        os_log("The key %s was read successfully from the keychain : %s",
                log: SessionServiceMiddleware.logger,
                type: .debug,
                key,
