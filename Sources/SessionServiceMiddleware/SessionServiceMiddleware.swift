@@ -33,8 +33,8 @@ public enum SessionStatusAction {
 //sourcery: AutoEquatable
 public struct SessionServiceState {
 
-    var state: AuthenticationState
-    var credentials: ASAuthorizationAppleIDCredential?
+    public var state: AuthenticationState
+    public var credentials: ASAuthorizationAppleIDCredential?
     
     public enum AuthenticationState {
         case authenticated

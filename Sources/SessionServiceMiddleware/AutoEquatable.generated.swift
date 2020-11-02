@@ -28,7 +28,7 @@ fileprivate func compareArrays<T>(lhs: [T], rhs: [T], compare: (_ lhs: T, _ rhs:
 extension SessionServiceState: Equatable {}
 public func == (lhs: SessionServiceState, rhs: SessionServiceState) -> Bool {
     guard lhs.state == rhs.state else { return false }
-    guard lhs.credentials == rhs.credentials else { return false }
+    guard compareOptionals(lhs: lhs.credentials, rhs: rhs.credentials, compare: ==) else { return false }
     return true
 }
 
