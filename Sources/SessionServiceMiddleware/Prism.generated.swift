@@ -10,9 +10,9 @@ import UIKit
 import AppKit
 #endif
 
-import ASAuthorizationCredential
+import AuthenticationServices
 extension SessionRequestAction {
-    public var authenticated: ASAuthorizationCredential? {
+    public var authenticated: ASAuthorizationAppleIDCredential? {
         get {
             guard case let .authenticated(associatedValue0) = self else { return nil }
             return (associatedValue0)

@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 import os.log
-import ç
+import AuthenticationServices
 import SwiftRex
 import SwiftKeychainWrapper
 
@@ -13,9 +13,9 @@ public enum SessionServiceAction {
     case status(SessionStatusAction)
 }
 
-//sourcery: Prism, imports = ["ASAuthorizationCredential"]
+//sourcery: Prism, imports = ["AuthenticationServices"]
 public enum SessionRequestAction {
-    case authenticated(ASAuthorizationCredential)
+    case authenticated(ASAuthorizationAppleIDCredential)
     case sessionState(String)
 }
 
@@ -34,9 +34,9 @@ public enum SessionStatusAction {
 public struct SessionServiceState {
 
     var state: AuthenticationState
-    var credentials: ASAuthorizationCredential
+    var credentials: ASAuthorizationAppleIDCredential
     
-    public enum AuthenticationState: Equatable {
+    public enum AuthenticationState {
         case authenticated
         case loggedOut
         case undefined
@@ -98,7 +98,7 @@ public final class SessionServiceMiddleware: Middleware {
         afterReducer _: inout AfterReducer
     ) {
         switch action {
-        case let .request(.authenticated(credential as ASAuthorizationAppleIDCredential)):
+        case let .request(.authenticated(credential)):
             if !write(userID: credential.user) { output?.dispatch(.status(.error(SessionError.FailureToWriteToKeychain))) }
         case let .request(.sessionState(user)):
             cancellable = provider
