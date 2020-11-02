@@ -34,12 +34,20 @@ public enum SessionStatusAction {
 public struct SessionServiceState {
 
     var state: AuthenticationState
-    var credentials: ASAuthorizationAppleIDCredential
+    var credentials: ASAuthorizationAppleIDCredential?
     
     public enum AuthenticationState {
         case authenticated
         case loggedOut
         case undefined
+    }
+    
+    public init(
+        state: AuthenticationState = .undefined,
+        credentials: ASAuthorizationAppleIDCredential? = nil
+    ) {
+        self.state = state
+        self.credentials = credentials
     }
 }
 
