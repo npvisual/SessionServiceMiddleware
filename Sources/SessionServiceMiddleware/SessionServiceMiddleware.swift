@@ -34,7 +34,7 @@ public enum SessionStatusAction {
 //sourcery: AutoEquatable
 public struct SessionServiceState {
 
-    public var authState: AuthenticationState = .undefined
+    public var authState: AuthenticationState
     public var identityToken: Data? = nil
     public var authorizationCode: Data? = nil
     public var state: String? = nil
@@ -52,6 +52,10 @@ public struct SessionServiceState {
     
     public enum RealUserStatus: Int, Equatable {
         case unsupported = 0, unknown, real
+    }
+    
+    public init(authState: AuthenticationState = .undefined) {
+        self.authState = authState
     }
 }
 
@@ -167,7 +171,7 @@ public final class SessionServiceMiddleware: Middleware {
 extension KeychainWrapper: SessionServiceStorage {
     
     static let logger = OSLog(subsystem: Bundle.main.bundleIdentifier!, category: "SessionServiceStorage")
-    static let storage = KeychainWrapper(serviceName: Bundle.main.bundleIdentifier ?? "SessionServiceStorage")
+    static public let storage = KeychainWrapper(serviceName: Bundle.main.bundleIdentifier ?? "SessionServiceStorage")
     
     public func write(data: Data, for key: String) -> Bool  {
         os_log("Writing key %s to the keychain...",
