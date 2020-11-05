@@ -15,8 +15,9 @@ public enum SessionServiceAction {
 
 //sourcery: Prism, imports = ["AuthenticationServices"]
 public enum SessionRequestAction {
-    case authenticated(ASAuthorizationAppleIDCredential)
-    case sessionState(String)
+    case login
+    case logout
+    case reset
 }
 
 //sourcery: Prism
@@ -33,8 +34,15 @@ public enum SessionStatusAction {
 //sourcery: AutoEquatable
 public struct SessionServiceState {
 
-    public var state: AuthenticationState
-    public var credentials: ASAuthorizationAppleIDCredential?
+    public var authState: AuthenticationState = .undefined
+    public var identityToken: Data? = nil
+    public var authorizationCode: Data? = nil
+    public var state: String? = nil
+    public var user: String? = nil
+    
+    public var fullName: PersonNameComponents? = nil
+    public var email: String? = nil
+    public var realUserStatus: RealUserStatus? = nil
     
     public enum AuthenticationState {
         case authenticated
@@ -42,12 +50,8 @@ public struct SessionServiceState {
         case undefined
     }
     
-    public init(
-        state: AuthenticationState = .undefined,
-        credentials: ASAuthorizationAppleIDCredential? = nil
-    ) {
-        self.state = state
-        self.credentials = credentials
+    public enum RealUserStatus: Int, Equatable {
+        case unsupported = 0, unknown, real
     }
 }
 
@@ -59,17 +63,27 @@ public enum CredentialStateResult {
 // MARK: - ERROR
 public enum SessionError: Error {
     case FailureToWriteToKeychain
+    case FailureToReadFromKeychain
+    case FailureToDecodeIdentityToken
     case UnknownCredentialState
 }
 
 // MARK: - CONSTANTS
 private enum KeyStorageNamingConstants {
-    static let userID = "userID"
+    static let user = "user"
+    static let email = "email"
+    static let identityToken = "id-token"
 }
 
 // MARK: - PROTOCOL
 public protocol SessionServiceProvider: ASAuthorizationProvider {
     func getCredentialState(userID: String) -> Future<CredentialStateResult, Never>
+}
+
+public protocol SessionServiceStorage {
+    func write(data: Data, for key: String) -> Bool
+    func read(key: String) -> Data?
+    func remove(key: String) -> Bool
 }
 
 public final class SessionServiceMiddleware: Middleware {
@@ -80,23 +94,45 @@ public final class SessionServiceMiddleware: Middleware {
     private static let logger = OSLog(subsystem: Bundle.main.bundleIdentifier!, category: "SessionServicesMiddleware")
 
     private var output: AnyActionHandler<OutputActionType>? = nil
+    private var state: StateType = StateType()
     
     private var provider: SessionServiceProvider
-    private var keychain: KeychainWrapper? = nil
+    private var keychain: SessionServiceStorage
     
+    private var idTokenSignal: PassthroughSubject<String, Never> = PassthroughSubject()
     private var cancellable: AnyCancellable?
     
-    public init(provider: SessionServiceProvider) {
+    public init(
+        provider: SessionServiceProvider,
+        storage: SessionServiceStorage
+    ) {
         self.provider = provider
+        self.keychain = storage
+        
+        cancellable = idTokenSignal
+            .flatMap { self.provider.getCredentialState(userID: $0) }
+            .sink() { [self] result in
+                if case let .success(state) = result {
+                    switch state {
+                    case .authorized: output?.dispatch(.status(.valid))
+                    case .revoked: output?.dispatch(.status(.terminated))
+                    case .notFound: output?.dispatch(.status(.undefined))
+                    default: output?.dispatch(.status(.error(SessionError.UnknownCredentialState)))
+                    }
+                }
+            }
     }
     
     public func receiveContext(getState: @escaping GetState<StateType>, output: AnyActionHandler<OutputActionType>) {
+        self.state = getState()
         self.output = output
-        self.keychain = KeychainWrapper(serviceName: Bundle.main.bundleIdentifier ?? "SessionServicesMiddleware")
-        // After the context is received, we immediately check to see if we have a stored user ID, which
-        // would indicate that the user has already registered, and dispatch the corresponding action.
-        if let userID = read(key: KeyStorageNamingConstants.userID) {
-            self.output?.dispatch(.status(.registered(userID)))
+        // After the context is received, we immediately check to see if we have a stored identity token, which
+        // would indicate that the user has already registered.
+        if let identityToken = keychain.read(key: KeyStorageNamingConstants.identityToken),
+           let token = String(data: identityToken, encoding: .utf8) {
+            idTokenSignal.send(token)
+        } else {
+            self.output?.dispatch(.status(.error(SessionError.FailureToWriteToKeychain)))
         }
     }
 
@@ -106,21 +142,21 @@ public final class SessionServiceMiddleware: Middleware {
         afterReducer _: inout AfterReducer
     ) {
         switch action {
-        case let .request(.authenticated(credential)):
-            if !write(userID: credential.user) { output?.dispatch(.status(.error(SessionError.FailureToWriteToKeychain))) }
-        case let .request(.sessionState(user)):
-            cancellable = provider
-                .getCredentialState(userID: user)
-                .sink() { [self] result in
-                    if case let .success(state) = result {
-                        switch state {
-                        case .authorized: output?.dispatch(.status(.valid))
-                        case .revoked: output?.dispatch(.status(.terminated))
-                        case .notFound: output?.dispatch(.status(.undefined))
-                        default: output?.dispatch(.status(.error(SessionError.UnknownCredentialState)))
-                        }
-                    }
-                }
+        case .request(.reset):
+            if keychain.remove(key: KeyStorageNamingConstants.identityToken) {
+                output?.dispatch(.status(.undefined))
+            } else {
+                output?.dispatch(.status(.error(SessionError.FailureToWriteToKeychain)))
+            }
+        case .request(.logout):
+            output?.dispatch(.status(.terminated))
+        case .request(.login):
+            if let idtoken = state.identityToken {
+                keychain.write(
+                    data: idtoken,
+                    for: KeyStorageNamingConstants.identityToken
+                ) ? output?.dispatch(.status(.valid)) : output?.dispatch(.status(.error(SessionError.FailureToWriteToKeychain)))
+            }
         default:
             break
         }
@@ -128,41 +164,33 @@ public final class SessionServiceMiddleware: Middleware {
 }
 
 // All the methods used to store and remove properties to / from the user's keychain.
-extension SessionServiceMiddleware {
-//    private func saveIDToken(_ idToken: AuthToken) {
-//        let encoder = JSONEncoder()
-//        if let data = try? encoder.encode(idToken) {
-//            let saveSuccessful: Bool = KeychainWrapper.standard.set(data, forKey: "id-token")
-//            os_log("The ID Token was stored successfully in the keychain : %s",
-//                   log: SessionManager.logger,
-//                   type: .debug,
-//                   saveSuccessful.description)
-//            // TODO: add a warning message in case the id token cannot be stored in the keychain.
-//        } else {
-//            os_log("Unable to decode AuthToken.",
-//                   log: SessionManager.logger,
-//                   type: .debug,
-//                   idToken.email)
-//        }
-//    }
+extension KeychainWrapper: SessionServiceStorage {
     
-    private func write(userID: String) -> Bool {
-        guard let saveSuccessful = keychain?.set(userID, forKey: KeyStorageNamingConstants.userID) else { return false }
-        os_log("The federated ID was stored successfully in the keychain : %s",
-               log: SessionServiceMiddleware.logger,
+    static let logger = OSLog(subsystem: Bundle.main.bundleIdentifier!, category: "SessionServiceStorage")
+    static let storage = KeychainWrapper(serviceName: Bundle.main.bundleIdentifier ?? "SessionServiceStorage")
+    
+    public func write(data: Data, for key: String) -> Bool  {
+        os_log("Writing key %s to the keychain...",
+               log: KeychainWrapper.logger,
                type: .debug,
-               saveSuccessful.description)
-        return saveSuccessful
+               key)
+        return KeychainWrapper.storage.set(data, forKey: key)
     }
     
-    private func read(key: String) -> String? {
-        guard let result = keychain?.string(forKey: key) else { return nil }
-        os_log("The key %s was read successfully from the keychain : %s",
-               log: SessionServiceMiddleware.logger,
+    public func read(key: String) -> Data? {
+        os_log("Reading %s from the keychain...",
+               log: KeychainWrapper.logger,
                type: .debug,
-               key,
-               result)
-        return result
+               key)
+        return KeychainWrapper.storage.data(forKey: key)
+    }
+    
+    public func remove(key: String) -> Bool {
+        os_log("Removing %s from the keychain...",
+               log: KeychainWrapper.logger,
+               type: .debug,
+               key)
+        return KeychainWrapper.storage.removeObject(forKey: key)
     }
 
 //    private func saveInviteCode(_ code: String) {
@@ -174,24 +202,6 @@ extension SessionServiceMiddleware {
 //               type: .debug,
 //               saveSuccessful.description)
 //        // TODO: add a warning message in case the invitaiton code cannot be stored in the keychain.
-//    }
-//
-//    private func removeIDToken() {
-//        let removeSuccessful: Bool = KeychainWrapper.standard.removeObject(forKey: "id-token")
-//        os_log("The ID Token was removed successfully from the keychain : %s",
-//               log: SessionManager.logger,
-//               type: .debug,
-//               removeSuccessful.description)
-//        // TODO: add a warning message in case the id token cannot be removed from the keychain.
-//    }
-//
-//    private func removeUserID() {
-//        let removeSuccessful: Bool = KeychainWrapper.standard.removeObject(forKey: "userID")
-//        os_log("The federated ID was removed successfully from the keychain : %s",
-//               log: SessionManager.logger,
-//               type: .debug,
-//               removeSuccessful.description)
-//        // TODO: add a warning message in case the id token cannot be removed from the keychain.
 //    }
 //
 //    private func removeInviteCode() {
@@ -224,12 +234,13 @@ extension ASAuthorizationAppleIDProvider: SessionServiceProvider {
 extension Reducer where ActionType == SessionServiceAction, StateType == SessionServiceState {
     public static let session = Reducer { action, state in
         var state = state
-        switch (state.state, action) {
-        case let (.loggedOut, .request(.authenticated(credential))) :
-            state.state = .authenticated
-            state.credentials = credential
-        case let (.authenticated, .request(.authenticated(credential))):
-            state.credentials = credential
+        switch action {
+        case .status(.terminated):
+            state.authState = .loggedOut
+        case .status(.undefined):
+            state = SessionServiceState()
+        case .request(.login):
+            state.authState = .authenticated
         default: break
         }
         return state

@@ -12,34 +12,37 @@ import AppKit
 
 import AuthenticationServices
 extension SessionRequestAction {
-    public var authenticated: ASAuthorizationAppleIDCredential? {
+    public var login: Void? {
         get {
-            guard case let .authenticated(associatedValue0) = self else { return nil }
-            return (associatedValue0)
-        }
-        set {
-            guard case .authenticated = self, let newValue = newValue else { return }
-            self = .authenticated(newValue)
+            guard case .login = self else { return nil }
+            return ()
         }
     }
 
-    public var isAuthenticated: Bool {
-        self.authenticated != nil
+    public var isLogin: Bool {
+        self.login != nil
     }
 
-    public var sessionState: String? {
+    public var logout: Void? {
         get {
-            guard case let .sessionState(associatedValue0) = self else { return nil }
-            return (associatedValue0)
-        }
-        set {
-            guard case .sessionState = self, let newValue = newValue else { return }
-            self = .sessionState(newValue)
+            guard case .logout = self else { return nil }
+            return ()
         }
     }
 
-    public var isSessionState: Bool {
-        self.sessionState != nil
+    public var isLogout: Bool {
+        self.logout != nil
+    }
+
+    public var reset: Void? {
+        get {
+            guard case .reset = self else { return nil }
+            return ()
+        }
+    }
+
+    public var isReset: Bool {
+        self.reset != nil
     }
 
 }
