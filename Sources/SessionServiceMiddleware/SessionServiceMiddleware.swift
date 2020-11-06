@@ -168,6 +168,10 @@ public final class SessionServiceMiddleware: Middleware {
                     data: idtoken,
                     for: KeyStorageNamingConstants.identityToken
                 ) ? output?.dispatch(.status(.valid)) : output?.dispatch(.status(.error(SessionError.FailureToWriteToKeychain)))
+            } else {
+                os_log("Login, but no idtoken in State...",
+                       log: KeychainWrapper.logger,
+                       type: .debug)
             }
         default:
             break
