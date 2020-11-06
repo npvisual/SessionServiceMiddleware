@@ -43,11 +43,11 @@ class AuthProviderTest: NSObject, SessionServiceProvider {
 }
 
 class StorageServiceTest: SessionServiceStorage {
-    func write(data: Data, for key: String) -> Bool {
+    func write(data: String, for key: String) -> Bool {
         return true
     }
     
-    func read(key: String) -> Data? {
+    func read(key: String) -> String? {
         return nil
     }
     

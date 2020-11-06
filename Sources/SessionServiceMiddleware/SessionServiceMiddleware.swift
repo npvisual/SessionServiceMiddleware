@@ -85,8 +85,8 @@ public protocol SessionServiceProvider: ASAuthorizationProvider {
 }
 
 public protocol SessionServiceStorage {
-    func write(data: Data, for key: String) -> Bool
-    func read(key: String) -> Data?
+    func write(data: String, for key: String) -> Bool
+    func read(key: String) -> String?
     func remove(key: String) -> Bool
 }
 
@@ -103,7 +103,7 @@ public final class SessionServiceMiddleware: Middleware {
     private var provider: SessionServiceProvider
     private var keychain: SessionServiceStorage
     
-    private var idTokenSignal: PassthroughSubject<String, Never> = PassthroughSubject()
+    private var userSignal: PassthroughSubject<String, Never> = PassthroughSubject()
     private var cancellable: AnyCancellable?
     
     public init(
@@ -113,7 +113,7 @@ public final class SessionServiceMiddleware: Middleware {
         self.provider = provider
         self.keychain = storage
         
-        cancellable = idTokenSignal
+        cancellable = userSignal
             .flatMap { self.provider.getCredentialState(userID: $0) }
             .sink() { [self] result in
                 if case let .success(state) = result {
@@ -140,9 +140,8 @@ public final class SessionServiceMiddleware: Middleware {
         self.output = output
         // After the context is received, we immediately check to see if we have a stored identity token, which
         // would indicate that the user has already registered.
-        if let identityToken = keychain.read(key: KeyStorageNamingConstants.identityToken),
-           let token = String(data: identityToken, encoding: .utf8) {
-            idTokenSignal.send(token)
+        if let userID = keychain.read(key: KeyStorageNamingConstants.user) {
+            userSignal.send(userID)
         } else {
             self.output?.dispatch(.status(.error(SessionError.FailureToWriteToKeychain)))
         }
@@ -158,7 +157,7 @@ public final class SessionServiceMiddleware: Middleware {
         // Actions to be handled BEFORE the reducer pipeline gets to mutate the global state.
         switch action {
         case .request(.reset):
-            if keychain.remove(key: KeyStorageNamingConstants.identityToken) {
+            if keychain.remove(key: KeyStorageNamingConstants.user) {
                 output?.dispatch(.status(.undefined))
             } else {
                 output?.dispatch(.status(.error(SessionError.FailureToWriteToKeychain)))
@@ -186,10 +185,10 @@ public final class SessionServiceMiddleware: Middleware {
                     type: .debug
                 )
 
-                if let idtoken = afterState.identityToken {
+                if let userID = afterState.user {
                     keychain.write(
-                        data: idtoken,
-                        for: KeyStorageNamingConstants.identityToken
+                        data: userID,
+                        for: KeyStorageNamingConstants.user
                     ) ? output?.dispatch(.status(.valid)) : output?.dispatch(.status(.error(SessionError.FailureToWriteToKeychain)))
                 } else {
                     os_log("Login, but no idtoken in State...",
@@ -207,7 +206,7 @@ extension KeychainWrapper: SessionServiceStorage {
     static let logger = OSLog(subsystem: Bundle.main.bundleIdentifier!, category: "SessionServiceStorage")
     static public let storage = KeychainWrapper(serviceName: Bundle.main.bundleIdentifier ?? "SessionServiceStorage")
     
-    public func write(data: Data, for key: String) -> Bool  {
+    public func write(data: String, for key: String) -> Bool  {
         os_log("Writing key %s to the keychain...",
                log: KeychainWrapper.logger,
                type: .debug,
@@ -215,12 +214,12 @@ extension KeychainWrapper: SessionServiceStorage {
         return KeychainWrapper.storage.set(data, forKey: key)
     }
     
-    public func read(key: String) -> Data? {
+    public func read(key: String) -> String? {
         os_log("Reading %s from the keychain...",
                log: KeychainWrapper.logger,
                type: .debug,
                key)
-        return KeychainWrapper.storage.data(forKey: key)
+        return KeychainWrapper.storage.string(forKey: key)
     }
     
     public func remove(key: String) -> Bool {
