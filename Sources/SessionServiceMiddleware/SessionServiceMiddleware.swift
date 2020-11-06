@@ -232,7 +232,7 @@ extension ASAuthorizationAppleIDProvider: SessionServiceProvider {
             self.getCredentialState(
                 forUserID: userID,
                 completion: { state, error in
-                    os_log("Credential state for :  ",
+                    os_log("Credential state for : %s",
                            log: KeychainWrapper.logger,
                            type: .debug,
                            userID)
