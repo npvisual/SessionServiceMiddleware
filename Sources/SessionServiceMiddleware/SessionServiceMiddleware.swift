@@ -151,8 +151,11 @@ public final class SessionServiceMiddleware: Middleware {
     public func handle(
         action: InputActionType,
         from dispatcher: ActionSource,
-        afterReducer _: inout AfterReducer
+        afterReducer : inout AfterReducer
     ) {
+        let beforeState: StateType = self.state
+        
+        // Actions to be handled BEFORE the reducer pipeline gets to mutate the global state.
         switch action {
         case .request(.reset):
             if keychain.remove(key: KeyStorageNamingConstants.identityToken) {
@@ -162,19 +165,27 @@ public final class SessionServiceMiddleware: Middleware {
             }
         case .request(.logout):
             output?.dispatch(.status(.terminated))
-        case .request(.login):
-            if let idtoken = state.identityToken {
-                keychain.write(
-                    data: idtoken,
-                    for: KeyStorageNamingConstants.identityToken
-                ) ? output?.dispatch(.status(.valid)) : output?.dispatch(.status(.error(SessionError.FailureToWriteToKeychain)))
-            } else {
-                os_log("Login, but no idtoken in State...",
-                       log: KeychainWrapper.logger,
-                       type: .debug)
-            }
         default:
             break
+        }
+        
+        // Actions to be handled AFTER the reducer pipeline has mutated the global state.
+        // This is required so we get access to the mutated state, i.e. new credentials
+        // so we can save them in the keychain.
+        afterReducer = .do { [self] in
+            let stateAfter = state
+            if stateAfter != beforeState {
+                if let idtoken = stateAfter.identityToken {
+                    keychain.write(
+                        data: idtoken,
+                        for: KeyStorageNamingConstants.identityToken
+                    ) ? output?.dispatch(.status(.valid)) : output?.dispatch(.status(.error(SessionError.FailureToWriteToKeychain)))
+                } else {
+                    os_log("Login, but no idtoken in State...",
+                           log: KeychainWrapper.logger,
+                           type: .debug)
+                }
+            }
         }
     }
 }
