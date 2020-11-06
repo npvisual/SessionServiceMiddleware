@@ -280,7 +280,7 @@ extension Reducer where ActionType == SessionServiceAction, StateType == Session
             state.authState = .loggedOut
         case .status(.undefined):
             state = SessionServiceState()
-        case .request(.login):
+        case .status(.valid):
             state.authState = .authenticated
         default: break
         }
