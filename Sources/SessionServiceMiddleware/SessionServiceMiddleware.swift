@@ -98,7 +98,7 @@ public final class SessionServiceMiddleware: Middleware {
     private static let logger = OSLog(subsystem: Bundle.main.bundleIdentifier!, category: "SessionServicesMiddleware")
 
     private var output: AnyActionHandler<OutputActionType>? = nil
-    private var state: StateType = StateType()
+    private var state: () -> StateType = {  StateType() }
     
     private var provider: SessionServiceProvider
     private var keychain: SessionServiceStorage
@@ -136,7 +136,7 @@ public final class SessionServiceMiddleware: Middleware {
     }
     
     public func receiveContext(getState: @escaping GetState<StateType>, output: AnyActionHandler<OutputActionType>) {
-        self.state = getState()
+        self.state = getState
         self.output = output
         // After the context is received, we immediately check to see if we have a stored identity token, which
         // would indicate that the user has already registered.
@@ -153,7 +153,7 @@ public final class SessionServiceMiddleware: Middleware {
         from dispatcher: ActionSource,
         afterReducer : inout AfterReducer
     ) {
-        let beforeState: StateType = self.state
+        let beforeState: StateType = self.state()
         
         // Actions to be handled BEFORE the reducer pipeline gets to mutate the global state.
         switch action {
@@ -173,9 +173,20 @@ public final class SessionServiceMiddleware: Middleware {
         // This is required so we get access to the mutated state, i.e. new credentials
         // so we can save them in the keychain.
         afterReducer = .do { [self] in
-            let stateAfter = state
-            if stateAfter != beforeState {
-                if let idtoken = stateAfter.identityToken {
+            let afterState = state()
+            os_log(
+                "Calling afterReducer closure...",
+                log: KeychainWrapper.logger,
+                type: .debug
+            )
+            if afterState != beforeState {
+                os_log(
+                    "afterState is different from beforeState...",
+                    log: KeychainWrapper.logger,
+                    type: .debug
+                )
+
+                if let idtoken = afterState.identityToken {
                     keychain.write(
                         data: idtoken,
                         for: KeyStorageNamingConstants.identityToken
