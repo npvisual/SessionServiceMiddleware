@@ -118,9 +118,17 @@ public final class SessionServiceMiddleware: Middleware {
             .sink() { [self] result in
                 if case let .success(state) = result {
                     switch state {
-                    case .authorized: output?.dispatch(.status(.valid))
+                    case .authorized:
+                        os_log("Credential state : authorized ...",
+                               log: KeychainWrapper.logger,
+                               type: .debug)
+                        output?.dispatch(.status(.valid))
                     case .revoked: output?.dispatch(.status(.terminated))
-                    case .notFound: output?.dispatch(.status(.undefined))
+                    case .notFound:
+                        os_log("Credential state : not found ...",
+                               log: KeychainWrapper.logger,
+                               type: .debug)
+                        output?.dispatch(.status(.undefined))
                     default: output?.dispatch(.status(.error(SessionError.UnknownCredentialState)))
                     }
                 }
@@ -224,6 +232,10 @@ extension ASAuthorizationAppleIDProvider: SessionServiceProvider {
             self.getCredentialState(
                 forUserID: userID,
                 completion: { state, error in
+                    os_log("Credential state for :  ",
+                           log: KeychainWrapper.logger,
+                           type: .debug,
+                           userID)
                     if error != nil {
                         promise(Result.success(CredentialStateResult.failure(.UnknownCredentialState)))
                     } else {
