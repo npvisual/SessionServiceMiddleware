@@ -170,21 +170,24 @@ public final class SessionServiceMiddleware: Middleware {
         // This is required so we get access to the mutated state, i.e. new credentials
         // so we can save them in the keychain.
         afterReducer = .do { [self] in
-            let afterState = state()
-            os_log(
-                "Calling afterReducer closure...",
-                log: KeychainWrapper.logger,
-                type: .debug
-            )
-            if let userID = afterState.user {
-                keychain.write(
-                    data: userID,
-                    for: KeyStorageNamingConstants.user
-                ) ? output?.dispatch(.status(.valid)) : output?.dispatch(.status(.error(SessionError.FailureToWriteToKeychain)))
-            } else {
-                os_log("Login, but no user in State...",
-                       log: KeychainWrapper.logger,
-                       type: .debug)
+            if case .request(.login) = action {
+                let afterState = state()
+                os_log(
+                    "Calling afterReducer closure for login case...",
+                    log: KeychainWrapper.logger,
+                    type: .debug
+                )
+                if let userID = afterState.user {
+                    keychain.write(
+                        data: userID,
+                        for: KeyStorageNamingConstants.user
+                    ) ? output?.dispatch(.status(.valid)) : output?.dispatch(.status(.error(SessionError.FailureToWriteToKeychain)))
+                } else {
+                    os_log("Login case, but no user in State...",
+                           log: KeychainWrapper.logger,
+                           type: .debug)
+                    output?.dispatch(.status(.error(SessionError.UnknownCredentialState)))
+                }
             }
         }
     }
