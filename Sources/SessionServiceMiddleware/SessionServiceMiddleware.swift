@@ -143,7 +143,7 @@ public final class SessionServiceMiddleware: Middleware {
         if let userID = keychain.read(key: KeyStorageNamingConstants.user) {
             userSignal.send(userID)
         } else {
-            self.output?.dispatch(.status(.error(SessionError.FailureToWriteToKeychain)))
+            self.output?.dispatch(.status(.error(SessionError.FailureToReadFromKeychain)))
         }
     }
 
@@ -152,8 +152,6 @@ public final class SessionServiceMiddleware: Middleware {
         from dispatcher: ActionSource,
         afterReducer : inout AfterReducer
     ) {
-        let beforeState: StateType = self.state()
-        
         // Actions to be handled BEFORE the reducer pipeline gets to mutate the global state.
         switch action {
         case .request(.reset):
@@ -178,23 +176,15 @@ public final class SessionServiceMiddleware: Middleware {
                 log: KeychainWrapper.logger,
                 type: .debug
             )
-            if afterState != beforeState {
-                os_log(
-                    "afterState is different from beforeState...",
-                    log: KeychainWrapper.logger,
-                    type: .debug
-                )
-
-                if let userID = afterState.user {
-                    keychain.write(
-                        data: userID,
-                        for: KeyStorageNamingConstants.user
-                    ) ? output?.dispatch(.status(.valid)) : output?.dispatch(.status(.error(SessionError.FailureToWriteToKeychain)))
-                } else {
-                    os_log("Login, but no idtoken in State...",
-                           log: KeychainWrapper.logger,
-                           type: .debug)
-                }
+            if let userID = afterState.user {
+                keychain.write(
+                    data: userID,
+                    for: KeyStorageNamingConstants.user
+                ) ? output?.dispatch(.status(.valid)) : output?.dispatch(.status(.error(SessionError.FailureToWriteToKeychain)))
+            } else {
+                os_log("Login, but no user in State...",
+                       log: KeychainWrapper.logger,
+                       type: .debug)
             }
         }
     }
