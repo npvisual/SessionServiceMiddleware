@@ -25,7 +25,7 @@ public enum SessionStatusAction {
     case valid
     case terminated
     case undefined
-    case registered(String)
+    case registered
     case error(Error)
 }
 
@@ -122,7 +122,7 @@ public final class SessionServiceMiddleware: Middleware {
                         os_log("Credential state : authorized ...",
                                log: KeychainWrapper.logger,
                                type: .debug)
-                        output?.dispatch(.status(.valid))
+                        output?.dispatch(.status(.registered))
                     case .revoked: output?.dispatch(.status(.terminated))
                     case .notFound:
                         os_log("Credential state : not found ...",

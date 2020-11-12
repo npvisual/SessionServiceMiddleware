@@ -112,14 +112,10 @@ extension SessionStatusAction {
         self.undefined != nil
     }
 
-    public var registered: String? {
+    public var registered: Void? {
         get {
-            guard case let .registered(associatedValue0) = self else { return nil }
-            return (associatedValue0)
-        }
-        set {
-            guard case .registered = self, let newValue = newValue else { return }
-            self = .registered(newValue)
+            guard case .registered = self else { return nil }
+            return ()
         }
     }
 
