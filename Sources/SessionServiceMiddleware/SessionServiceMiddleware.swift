@@ -15,6 +15,7 @@ public enum SessionRequestAction {
     case start
     case stop
     case refresh
+    case reset
 }
 
 // MARK: - STATE
@@ -47,12 +48,12 @@ public final class SessionServiceMiddleware: Middleware {
     ) {
         // Actions to be handled BEFORE the reducer pipeline gets to mutate the global state.
         switch action {
-            case .request(.start):
-                output?.dispatch(.status(.valid))
-            case .request(.refresh):
+            case .request(.start), .request(.refresh):
                 output?.dispatch(.status(.valid))
             case .request(.stop):
                 output?.dispatch(.status(.terminated))
+            case .request(.reset):
+                output?.dispatch(.status(.undefined))
             default:
                 break
         }
