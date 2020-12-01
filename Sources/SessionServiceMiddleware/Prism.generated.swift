@@ -26,6 +26,17 @@ extension SessionRequestAction {
         self.start != nil
     }
 
+    public var validate: Void? {
+        get {
+            guard case .validate = self else { return nil }
+            return ()
+        }
+    }
+
+    public var isValidate: Bool {
+        self.validate != nil
+    }
+
     public var stop: Void? {
         get {
             guard case .stop = self else { return nil }
