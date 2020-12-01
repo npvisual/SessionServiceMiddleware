@@ -32,6 +32,9 @@ public struct SessionServiceState: Equatable {
         case terminated
         case undefined
     }
+    
+    public static let empty: SessionServiceState = .init(status: .undefined)
+
 }
 
 // MARK: - MIDDLEWARE
