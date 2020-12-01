@@ -13,6 +13,7 @@ public enum SessionServiceAction {
 //sourcery: Prism
 public enum SessionRequestAction {
     case start(String)
+    case validate
     case stop
     case refresh
     case reset
@@ -22,11 +23,12 @@ public enum SessionRequestAction {
 public struct SessionServiceState: Equatable {
 
     public var status: SessionStatus
+    public var uid: String?
     public var start: Date?
     public var refresh: Date?
 
     public enum SessionStatus: Equatable {
-        case valid(String)
+        case valid
         case terminated
         case undefined
     }
@@ -56,11 +58,21 @@ public final class SessionServiceMiddleware: Middleware {
         afterReducer : inout AfterReducer
     ) {
         // Actions to be handled BEFORE the reducer pipeline gets to mutate the global state.
+        os_log(
+            "Handling actions before the reducer...",
+            log: SessionServiceMiddleware.logger,
+            type: .debug
+        )
         switch action {
-            case let .request(.start(id)):
-                output?.dispatch(
-                    .status(SessionServiceState(status: .valid(id), start: Date()))
-                )
+            case .request(.validate):
+                var state = getState()
+                if state.uid != nil {
+                    state.status = .valid
+                    state.start = Date()
+                } else {
+                    state = SessionServiceState(status: .undefined)
+                }
+                output?.dispatch(.status(state))
             case .request(.refresh):
                 var state = getState()
                 state.refresh = Date()
@@ -79,9 +91,11 @@ extension Reducer where ActionType == SessionServiceAction, StateType == Session
     public static let session = Reducer { action, state in
         var state = state
         switch action {
-        case let .status(value):
-            state = value
-        default: break
+            case let .request(.start(id)):
+                state.uid = id
+            case let .status(value):
+                state = value
+            default: break
         }
         return state
     }
