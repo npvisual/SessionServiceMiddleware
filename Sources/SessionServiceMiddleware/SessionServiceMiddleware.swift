@@ -43,6 +43,8 @@ public final class SessionServiceMiddleware: Middleware {
     private var output: AnyActionHandler<OutputActionType>? = nil
     private var getState: GetState<StateType> = { StateType(status: .undefined) }
     
+    public init() { }
+    
     public func receiveContext(getState: @escaping GetState<StateType>, output: AnyActionHandler<OutputActionType>) {
         self.output = output
         self.getState = getState
