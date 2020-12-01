@@ -21,9 +21,9 @@ public enum SessionRequestAction {
 // MARK: - STATE
 public struct SessionServiceState: Equatable {
 
-    var status: SessionStatus
-    var start: Date?
-    var refresh: Date?
+    public var status: SessionStatus
+    public var start: Date?
+    public var refresh: Date?
 
     public enum SessionStatus: Equatable {
         case valid(String)
@@ -41,7 +41,7 @@ public final class SessionServiceMiddleware: Middleware {
     private static let logger = OSLog(subsystem: Bundle.main.bundleIdentifier!, category: "SessionServicesMiddleware")
 
     private var output: AnyActionHandler<OutputActionType>? = nil
-    private var getState: GetState<StateType> = { StateType(status: .undefined) } 
+    private var getState: GetState<StateType> = { StateType(status: .undefined) }
     
     public func receiveContext(getState: @escaping GetState<StateType>, output: AnyActionHandler<OutputActionType>) {
         self.output = output
