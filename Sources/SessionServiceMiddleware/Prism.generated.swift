@@ -11,10 +11,14 @@ import AppKit
 #endif
 
 extension SessionRequestAction {
-    public var start: Void? {
+    public var start: String? {
         get {
-            guard case .start = self else { return nil }
-            return ()
+            guard case let .start(associatedValue0) = self else { return nil }
+            return (associatedValue0)
+        }
+        set {
+            guard case .start = self, let newValue = newValue else { return }
+            self = .start(newValue)
         }
     }
 
@@ -42,6 +46,17 @@ extension SessionRequestAction {
 
     public var isRefresh: Bool {
         self.refresh != nil
+    }
+
+    public var reset: Void? {
+        get {
+            guard case .reset = self else { return nil }
+            return ()
+        }
+    }
+
+    public var isReset: Bool {
+        self.reset != nil
     }
 
 }

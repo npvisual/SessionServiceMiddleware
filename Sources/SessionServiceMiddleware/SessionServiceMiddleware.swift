@@ -12,17 +12,24 @@ public enum SessionServiceAction {
 
 //sourcery: Prism
 public enum SessionRequestAction {
-    case start
+    case start(String)
     case stop
     case refresh
     case reset
 }
 
 // MARK: - STATE
-public enum SessionServiceState: Equatable {
-    case valid
-    case terminated
-    case undefined
+public struct SessionServiceState: Equatable {
+
+    var status: SessionStatus
+    var start: Date?
+    var refresh: Date?
+
+    public enum SessionStatus: Equatable {
+        case valid(String)
+        case terminated
+        case undefined
+    }
 }
 
 // MARK: - MIDDLEWARE
@@ -34,11 +41,11 @@ public final class SessionServiceMiddleware: Middleware {
     private static let logger = OSLog(subsystem: Bundle.main.bundleIdentifier!, category: "SessionServicesMiddleware")
 
     private var output: AnyActionHandler<OutputActionType>? = nil
-    
-    public init() { }
+    private var getState: GetState<StateType> = { StateType(status: .undefined) } 
     
     public func receiveContext(getState: @escaping GetState<StateType>, output: AnyActionHandler<OutputActionType>) {
         self.output = output
+        self.getState = getState
     }
 
     public func handle(
@@ -48,14 +55,19 @@ public final class SessionServiceMiddleware: Middleware {
     ) {
         // Actions to be handled BEFORE the reducer pipeline gets to mutate the global state.
         switch action {
-            case .request(.start), .request(.refresh):
-                output?.dispatch(.status(.valid))
+            case let .request(.start(id)):
+                output?.dispatch(
+                    .status(SessionServiceState(status: .valid(id), start: Date()))
+                )
+            case .request(.refresh):
+                var state = getState()
+                state.refresh = Date()
+                output?.dispatch(.status(state))
             case .request(.stop):
-                output?.dispatch(.status(.terminated))
+                output?.dispatch(.status(SessionServiceState(status: .terminated)))
             case .request(.reset):
-                output?.dispatch(.status(.undefined))
-            default:
-                break
+                output?.dispatch(.status(SessionServiceState(status: .undefined)))
+            default: break
         }
     }
 }
